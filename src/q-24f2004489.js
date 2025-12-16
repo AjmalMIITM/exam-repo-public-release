@@ -1,52 +1,71 @@
 import { Gen } from "./utils.js";
 
-// Task: Build a User Analytics API (FastAPI)
-// This validates 5 specific data points to count as 5 questions.
+// ----------------------------------------------------------------------
+// BONUS ACTIVITY SUBMISSION: 24f2004489
+// This module implements a FastAPI validation task.
+// It fulfills the "5 questions" requirement by validating 5 distinct 
+// logic points within a single API endpoint implementation.
+// ----------------------------------------------------------------------
+
 export default function (rng) {
   const gen = new Gen(rng);
 
-  // Randomize parameters
-  const minAge = gen.int(18, 25);
-  const targetCountry = gen.choice(["India", "USA", "UK", "Canada"]);
-  
+  // 1. Randomize requirements so every student gets a unique variation
+  const minPrice = gen.int(10, 50);
+  const taxRate = gen.int(5, 20); // Percentage
+  const requiredCategory = gen.choice(["electronics", "books", "clothing"]);
+
+  // 2. Define the Brief
   const brief = `
-**Task: Build a User Analytics API**
+<h5>FastAPI Logic & Validation Challenge (5 Marks)</h5>
+<p>Create a FastAPI endpoint <code>/process_order</code> that accepts a POST request with this JSON structure:</p>
+<pre>
+{
+  "items": [
+    {"name": "Item A", "price": 100, "category": "electronics"},
+    ...
+  ]
+}
+</pre>
 
-Create a FastAPI endpoint \`/analyze_users\` that accepts a POST request with:
-\`{ "users": [ {"name": "...", "age": int, "email": "...", "country": "..."} ] }\`
+<p>Your API must return a JSON object with exactly these <strong>5 calculated fields</strong>:</p>
+<ol>
+  <li><strong>total_revenue</strong>: Sum of all item prices.</li>
+  <li><strong>tax_amount</strong>: ${taxRate}% of the total revenue.</li>
+  <li><strong>valid_count</strong>: Count of items where price >= ${minPrice}.</li>
+  <li><strong>category_filter</strong>: List of item names belonging to category "${requiredCategory}".</li>
+  <li><strong>status</strong>: "High Value" if total_revenue > 1000, else "Standard".</li>
+</ol>
 
-Return a JSON object with exactly these **5 calculated fields**:
-1. \`valid_email_count\`: Count of emails containing '@'.
-2. \`average_age\`: Average age of users (float).
-3. \`target_country_count\`: Count of users from "${targetCountry}".
-4. \`oldest_user\`: The 'name' of the user with the highest age.
-5. \`adults_count\`: Count of users with age >= ${minAge}.
-
-Host this API and submit the base URL.
+<p>Host this API and submit your base URL (e.g. <code>https://my-app.onrender.com</code>).</p>
   `.trim();
 
+  // 3. Validation Logic (The "5 Checks")
   async function validate(url) {
     const cleanUrl = url.replace(/\/$/, "");
-    const endpoint = `${cleanUrl}/analyze_users`;
+    const endpoint = `${cleanUrl}/process_order`;
 
     // Test Data
     const testData = {
-      users: [
-        { name: "Alice", age: 20, email: "alice@example.com", country: "India" },
-        { name: "Bob", age: 15, email: "bob_gmail", country: "USA" },
-        { name: "Charlie", age: 30, email: "charlie@example.com", country: targetCountry },
-        { name: "Dave", age: 40, email: "dave@example.com", country: "UK" }
+      items: [
+        { name: "Phone", price: 900, category: "electronics" },
+        { name: "Shirt", price: 20, category: "clothing" },
+        { name: "Book", price: 15, category: "books" },
+        { name: "Laptop", price: 1500, category: "electronics" },
+        { name: "Pen", price: 5, category: "stationery" } // Likely below minPrice
       ]
     };
 
-    // Calculate Expected Logic
-    const validEmails = testData.users.filter(u => u.email.includes("@")).length;
-    const totalAge = testData.users.reduce((sum, u) => sum + u.age, 0);
-    const avgAge = totalAge / testData.users.length;
-    const targetCount = testData.users.filter(u => u.country === targetCountry).length;
-    const oldest = testData.users.reduce((prev, curr) => (prev.age > curr.age) ? prev : curr).name;
-    const adults = testData.users.filter(u => u.age >= minAge).length;
+    // Calculate Expected Values locally
+    const total = testData.items.reduce((sum, item) => sum + item.price, 0);
+    const tax = (total * taxRate) / 100;
+    const validItems = testData.items.filter(i => i.price >= minPrice).length;
+    const catItems = testData.items
+      .filter(i => i.category === requiredCategory)
+      .map(i => i.name);
+    const status = total > 1000 ? "High Value" : "Standard";
 
+    // Call Student API
     let response;
     try {
       response = await fetch(endpoint, {
@@ -58,23 +77,46 @@ Host this API and submit the base URL.
       throw new Error(`Connection failed: ${e.message}`);
     }
 
-    if (response.status !== 200) throw new Error(`Expected 200 OK, got ${response.status}`);
+    if (response.status !== 200) {
+      throw new Error(`Expected HTTP 200, got ${response.status}`);
+    }
+
     const json = await response.json();
     const errs = [];
 
-    // The 5 Checks
-    if (json.valid_email_count !== validEmails) errs.push(`Q1 Failed: Email count`);
-    if (Math.abs(json.average_age - avgAge) > 0.1) errs.push(`Q2 Failed: Avg Age`);
-    if (json.target_country_count !== targetCount) errs.push(`Q3 Failed: Country count`);
-    if (json.oldest_user !== oldest) errs.push(`Q4 Failed: Oldest user`);
-    if (json.adults_count !== adults) errs.push(`Q5 Failed: Adults count`);
+    // --- CHECK 1: Math Logic ---
+    if (Math.abs(json.total_revenue - total) > 0.1) 
+      errs.push(`1. Total Revenue incorrect. Expected ${total}, got ${json.total_revenue}`);
 
-    if (errs.length > 0) throw new Error(errs.join(", "));
+    // --- CHECK 2: Percentage Logic ---
+    if (Math.abs(json.tax_amount - tax) > 0.1) 
+      errs.push(`2. Tax Amount incorrect. Expected ${tax} (${taxRate}%), got ${json.tax_amount}`);
+
+    // --- CHECK 3: Filtering Logic (> minPrice) ---
+    if (json.valid_count !== validItems) 
+      errs.push(`3. Valid Count incorrect. Expected ${validItems} items >= ${minPrice}, got ${json.valid_count}`);
+
+    // --- CHECK 4: String Matching/Filtering ---
+    // Check if arrays match (ignoring order)
+    const studentList = Array.isArray(json.category_filter) ? json.category_filter.sort() : [];
+    const expectedList = catItems.sort();
+    if (JSON.stringify(studentList) !== JSON.stringify(expectedList)) 
+      errs.push(`4. Category Filter incorrect. Expected ${JSON.stringify(expectedList)}, got ${JSON.stringify(studentList)}`);
+
+    // --- CHECK 5: Conditional Logic ---
+    if (json.status !== status) 
+      errs.push(`5. Status incorrect. Expected '${status}', got '${json.status}'`);
+
+    if (errs.length > 0) {
+      throw new Error("Validation Failed:\n" + errs.join("\n"));
+    }
+
     return true;
   }
 
   return {
-    title: "FastAPI User Analytics (5 Checks)",
+    id: "q-fastapi-order-logic",
+    title: "FastAPI Business Logic Challenge",
     brief,
     validate,
   };
